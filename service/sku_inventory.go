@@ -13,16 +13,16 @@ import (
 
 const (
 	sqlSelectSkuInventoryRestore = "op_tx_id"
-	sqlSelectSkuInventoryRecord  = "shop_id,sku_code,amount,update_time,op_tx_id"
+	sqlSelectSkuInventoryRecord  = "id,shop_id,sku_code,amount,update_time,op_tx_id"
 )
 
-func HandleSkuInventoryRestore() {
+func HandleOrderFailedSkuInventoryRestore() {
 	ctx := context.Background()
 	where := map[string]interface{}{
 		"verify":  0, // 记录未经验证
 		"op_type": 1, // 出库
 	}
-	recordList, err := repository.FindSkuInventoryRecordList(sqlSelectSkuInventoryRestore, where)
+	recordList, err := repository.FindSkuInventoryRecordList(sqlSelectSkuInventoryRestore, where, 300, 1)
 	if err != nil {
 		kelvins.ErrLogger.Errorf(ctx, "FindSkuInventoryRecordList,err: %v, req: %+v", err, where)
 		return
@@ -66,8 +66,10 @@ func HandleSkuInventoryRestore() {
 	}
 	skuInventoryRecordWhere := map[string]interface{}{
 		"op_tx_id": skuInventoryFailedOrder,
+		"verify":   0, // 记录未经验证
+		"op_type":  1, // 出库
 	}
-	skuInventoryRecordList, err := repository.FindSkuInventoryRecordList(sqlSelectSkuInventoryRecord, skuInventoryRecordWhere)
+	skuInventoryRecordList, err := repository.FindSkuInventoryRecordList(sqlSelectSkuInventoryRecord, skuInventoryRecordWhere, 300, 1)
 	if err != nil {
 		kelvins.ErrLogger.Errorf(ctx, "FindSkuInventoryRecordList err: %v, where: %+v", err, skuInventoryRecordWhere)
 		return
@@ -75,13 +77,13 @@ func HandleSkuInventoryRestore() {
 	if len(skuInventoryRecordList) == 0 {
 		return
 	}
-	tx := kelvins.XORM_DBEngine.NewSession()
-	err = tx.Begin()
-	if err != nil {
-		kelvins.ErrLogger.Errorf(ctx, "HandleSkuInventoryRestore Begin err: %v, ", err)
-		return
-	}
 	for i := 0; i < len(skuInventoryRecordList); i++ {
+		tx := kelvins.XORM_DBEngine.NewSession()
+		err = tx.Begin()
+		if err != nil {
+			kelvins.ErrLogger.Errorf(ctx, "HandleSkuInventoryRestore Begin err: %v, ", err)
+			return
+		}
 		row := skuInventoryRecordList[i]
 		getSkuInventoryWhere := map[string]interface{}{
 			"shop_id":  row.ShopId,
@@ -98,16 +100,18 @@ func HandleSkuInventoryRestore() {
 		if skuInventory.SkuCode == "" {
 			continue
 		}
-		// 记录库存日志
+		// 更新库存记录
 		inventoryRecordWhere := map[string]interface{}{
-			"op_tx_id":    row.OpTxId,
-			"update_time": row.UpdateTime,
+			"id":       row.Id,
+			"op_tx_id": row.OpTxId,
+			"op_type":  1, // 出库
+			"verify":   0, // 未验证
 		}
 		inventoryRecordMaps := map[string]interface{}{
 			"verify":      1,
 			"update_time": time.Now(),
 		}
-		rowAffected, err := repository.UpdateSkuInventoryRecord(tx, inventoryRecordWhere, inventoryRecordMaps)
+		rowAffected, err := repository.UpdateSkuInventoryRecordByTx(tx, inventoryRecordWhere, inventoryRecordMaps)
 		if err != nil {
 			err = tx.Rollback()
 			if err != nil {
@@ -116,6 +120,7 @@ func HandleSkuInventoryRestore() {
 			kelvins.ErrLogger.Errorf(ctx, "UpdateSkuInventoryRecord err: %v, where: %+v,maps: %+v ", err, inventoryRecordWhere, inventoryRecordMaps)
 			return
 		}
+		// 库存记录可能是同一个订单扣减的
 		if rowAffected != 1 {
 			err = tx.Rollback()
 			if err != nil {
@@ -149,13 +154,12 @@ func HandleSkuInventoryRestore() {
 		}
 		// 更新库存
 		updateSkuInventoryWhere := map[string]interface{}{
-			"shop_id":     skuInventory.ShopId,
-			"sku_code":    skuInventory.SkuCode,
-			"amount":      skuInventory.Amount,
-			"update_time": skuInventory.UpdateTime,
+			"shop_id":  skuInventory.ShopId,
+			"sku_code": skuInventory.SkuCode,
+			"amount":   skuInventory.Amount,
 		}
 		updateSkuInventoryMaps := map[string]interface{}{
-			"amount":      row.Amount,
+			"amount":      skuInventory.Amount + row.Amount,
 			"update_time": time.Now(),
 		}
 		rowAffected, err = repository.UpdateSkuInventory(tx, updateSkuInventoryWhere, updateSkuInventoryMaps)
@@ -174,10 +178,77 @@ func HandleSkuInventoryRestore() {
 			}
 			return
 		}
+		err = tx.Commit()
+		if err != nil {
+			kelvins.ErrLogger.Errorf(ctx, "HandleSkuInventoryRestore Commit err: %v, ", err)
+		}
 	}
-	err = tx.Commit()
-	if err != nil {
-		kelvins.ErrLogger.Errorf(ctx, "HandleSkuInventoryRestore Commit err: %v, ", err)
-	}
+
 	return
+}
+
+func HandleOrderSuccessSkuInventoryRestore() {
+	ctx := context.Background()
+	where := map[string]interface{}{
+		"verify":  0, // 记录未经验证
+		"op_type": 1, // 出库
+	}
+	recordList, err := repository.FindSkuInventoryRecordList(sqlSelectSkuInventoryRestore, where, 300, 1)
+	if err != nil {
+		kelvins.ErrLogger.Errorf(ctx, "FindSkuInventoryRecordList,err: %v, req: %+v", err, where)
+		return
+	}
+	if len(recordList) == 0 {
+		return
+	}
+	opTxIds := make([]string, len(recordList))
+	for i := 0; i < len(recordList); i++ {
+		opTxIds[i] = recordList[i].OpTxId
+	}
+	serverName := args.RpcServiceMicroMallOrder
+	conn, err := util.GetGrpcClient(serverName)
+	if err != nil {
+		kelvins.ErrLogger.Errorf(ctx, "GetGrpcClient %v,err: %v", serverName, err)
+		return
+	}
+	defer conn.Close()
+	client := order_business.NewOrderBusinessServiceClient(conn)
+	req := order_business.CheckOrderStateRequest{OrderCodes: opTxIds}
+	rsp, err := client.CheckOrderState(ctx, &req)
+	if err != nil {
+		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest %v,err: %v, req: %+v", serverName, err, req)
+		return
+	}
+	if rsp.Common.Code != order_business.RetCode_SUCCESS {
+		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest %v,err: %v, req: %+v, rsp: %+v", serverName, err, req, rsp)
+		return
+	}
+	if len(rsp.List) == 0 {
+		return
+	}
+	// 支付成功的订单
+	skuInventorySuccessOrder := make([]string, 0)
+	for i := 0; i < len(rsp.List); i++ {
+		if rsp.List[i].IsExist && rsp.List[i].PayState == order_business.OrderPayStateType_PAY_SUCCESS {
+			skuInventorySuccessOrder = append(skuInventorySuccessOrder, rsp.List[i].OrderCode)
+		}
+	}
+	if len(skuInventorySuccessOrder) == 0 {
+		return
+	}
+	updateWhere := map[string]interface{}{
+		"op_tx_id": skuInventorySuccessOrder,
+		"verify":   0, // 记录未经验证
+		"op_type":  1, // 出库
+	}
+	updateMaps := map[string]interface{}{
+		"verify":      1,
+		"update_time": time.Now(),
+	}
+	rowAffected, err := repository.UpdateSkuInventoryRecord(updateWhere, updateMaps)
+	if err != nil {
+		kelvins.ErrLogger.Errorf(ctx, "UpdateSkuInventoryRecord err: %v, where: %+v", err, updateWhere)
+		return
+	}
+	_ = rowAffected
 }
