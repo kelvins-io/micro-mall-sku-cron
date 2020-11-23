@@ -30,9 +30,13 @@ func HandleOrderFailedSkuInventoryRestore() {
 	if len(recordList) == 0 {
 		return
 	}
-	opTxIds := make([]string, len(recordList))
+	opTxIds := make([]string, 0)
+	opTxIdsSet := map[string]struct{}{}
 	for i := 0; i < len(recordList); i++ {
-		opTxIds[i] = recordList[i].OpTxId
+		if _, ok := opTxIdsSet[recordList[i].OpTxId]; !ok {
+			opTxIdsSet[recordList[i].OpTxId] = struct{}{}
+			opTxIds = append(opTxIds, recordList[i].OpTxId)
+		}
 	}
 	serverName := args.RpcServiceMicroMallOrder
 	conn, err := util.GetGrpcClient(serverName)
@@ -56,9 +60,13 @@ func HandleOrderFailedSkuInventoryRestore() {
 		return
 	}
 	skuInventoryFailedOrder := make([]string, 0)
+	skuInventoryFailedOrderSet := map[string]struct{}{}
 	for i := 0; i < len(rsp.List); i++ {
 		if !rsp.List[i].IsExist {
-			skuInventoryFailedOrder = append(skuInventoryFailedOrder, rsp.List[i].OrderCode)
+			if _, ok := skuInventoryFailedOrderSet[rsp.List[i].OrderCode]; !ok {
+				skuInventoryFailedOrderSet[rsp.List[i].OrderCode] = struct{}{}
+				skuInventoryFailedOrder = append(skuInventoryFailedOrder, rsp.List[i].OrderCode)
+			}
 		}
 	}
 	if len(skuInventoryFailedOrder) == 0 {
