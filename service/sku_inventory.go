@@ -8,6 +8,7 @@ import (
 	"gitee.com/cristiane/micro-mall-sku-cron/proto/micro_mall_order_proto/order_business"
 	"gitee.com/cristiane/micro-mall-sku-cron/repository"
 	"gitee.com/kelvins-io/kelvins"
+	"github.com/google/uuid"
 	"time"
 )
 
@@ -97,7 +98,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 			"shop_id":  row.ShopId,
 			"sku_code": row.SkuCode,
 		}
-		skuInventory, err := repository.GetSkuInventory(tx, "*", getSkuInventoryWhere)
+		skuInventory, err := repository.GetSkuInventory(tx, "shop_id,sku_code,amount,last_tx_id", getSkuInventoryWhere)
 		if err != nil {
 			err = tx.Rollback()
 			if err != nil {
@@ -108,6 +109,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 		if skuInventory.SkuCode == "" {
 			continue
 		}
+		opTxId := uuid.New().String()
 		// 更新库存记录
 		inventoryRecordWhere := map[string]interface{}{
 			"id":       row.Id,
@@ -117,6 +119,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 		}
 		inventoryRecordMaps := map[string]interface{}{
 			"verify":      1,
+			"op_tx_id":    opTxId,
 			"update_time": time.Now(),
 		}
 		rowAffected, err := repository.UpdateSkuInventoryRecordByTx(tx, inventoryRecordWhere, inventoryRecordMaps)
@@ -145,7 +148,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 			OpIp:         "micro_mall_sku_cron",
 			AmountBefore: skuInventory.Amount,
 			Amount:       row.Amount,
-			OpTxId:       row.OpTxId, // 恢复库存
+			OpTxId:       opTxId, // 恢复库存
 			State:        0,
 			Verify:       1,
 			CreateTime:   time.Now(),
@@ -162,12 +165,14 @@ func HandleOrderFailedSkuInventoryRestore() {
 		}
 		// 更新库存
 		updateSkuInventoryWhere := map[string]interface{}{
-			"shop_id":  skuInventory.ShopId,
-			"sku_code": skuInventory.SkuCode,
-			"amount":   skuInventory.Amount,
+			"shop_id":    skuInventory.ShopId,
+			"sku_code":   skuInventory.SkuCode,
+			"amount":     skuInventory.Amount,
+			"last_tx_id": skuInventory.LastTxId,
 		}
 		updateSkuInventoryMaps := map[string]interface{}{
 			"amount":      skuInventory.Amount + row.Amount,
+			"last_tx_id":  opTxId,
 			"update_time": time.Now(),
 		}
 		rowAffected, err = repository.UpdateSkuInventory(tx, updateSkuInventoryWhere, updateSkuInventoryMaps)
@@ -236,9 +241,13 @@ func HandleOrderSuccessSkuInventoryRestore() {
 	}
 	// 支付成功的订单
 	skuInventorySuccessOrder := make([]string, 0)
+	skuInventorySuccessOrderSet := map[string]struct{}{}
 	for i := 0; i < len(rsp.List); i++ {
 		if rsp.List[i].IsExist && rsp.List[i].PayState == order_business.OrderPayStateType_PAY_SUCCESS {
-			skuInventorySuccessOrder = append(skuInventorySuccessOrder, rsp.List[i].OrderCode)
+			if _, ok := skuInventorySuccessOrderSet[rsp.List[i].OrderCode]; !ok {
+				skuInventorySuccessOrderSet[rsp.List[i].OrderCode] = struct{}{}
+				skuInventorySuccessOrder = append(skuInventorySuccessOrder, rsp.List[i].OrderCode)
+			}
 		}
 	}
 	if len(skuInventorySuccessOrder) == 0 {
@@ -251,6 +260,7 @@ func HandleOrderSuccessSkuInventoryRestore() {
 	}
 	updateMaps := map[string]interface{}{
 		"verify":      1,
+		"op_tx_id":    uuid.New().String(),
 		"update_time": time.Now(),
 	}
 	rowAffected, err := repository.UpdateSkuInventoryRecord(updateWhere, updateMaps)
