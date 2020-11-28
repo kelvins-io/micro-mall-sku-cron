@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	sqlSelectSkuInventoryRestore = "op_tx_id"
-	sqlSelectSkuInventoryRecord  = "id,shop_id,sku_code,amount,update_time,op_tx_id"
+	sqlSelectSkuInventoryRestore = "out_trade_no"
+	sqlSelectSkuInventoryRecord  = "id,shop_id,sku_code,amount,update_time,op_tx_id,out_trade_no"
 )
 
 func HandleOrderFailedSkuInventoryRestore() {
@@ -31,12 +31,12 @@ func HandleOrderFailedSkuInventoryRestore() {
 	if len(recordList) == 0 {
 		return
 	}
-	opTxIds := make([]string, 0)
-	opTxIdsSet := map[string]struct{}{}
+	outTradeNoList := make([]string, 0)
+	outTradeNoListSet := map[string]struct{}{}
 	for i := 0; i < len(recordList); i++ {
-		if _, ok := opTxIdsSet[recordList[i].OpTxId]; !ok {
-			opTxIdsSet[recordList[i].OpTxId] = struct{}{}
-			opTxIds = append(opTxIds, recordList[i].OpTxId)
+		if _, ok := outTradeNoListSet[recordList[i].OutTradeNo]; !ok {
+			outTradeNoListSet[recordList[i].OutTradeNo] = struct{}{}
+			outTradeNoList = append(outTradeNoList, recordList[i].OutTradeNo)
 		}
 	}
 	serverName := args.RpcServiceMicroMallOrder
@@ -47,7 +47,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 	}
 	defer conn.Close()
 	client := order_business.NewOrderBusinessServiceClient(conn)
-	req := order_business.CheckOrderStateRequest{OrderCodes: opTxIds}
+	req := order_business.CheckOrderStateRequest{OrderCodes: outTradeNoList}
 	rsp, err := client.CheckOrderState(ctx, &req)
 	if err != nil {
 		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest %v,err: %v, req: %+v", serverName, err, req)
@@ -63,6 +63,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 	skuInventoryFailedOrder := make([]string, 0)
 	skuInventoryFailedOrderSet := map[string]struct{}{}
 	for i := 0; i < len(rsp.List); i++ {
+		// 扣减库存成功，创建订单失败（这种情况应该很少）
 		if !rsp.List[i].IsExist {
 			if _, ok := skuInventoryFailedOrderSet[rsp.List[i].OrderCode]; !ok {
 				skuInventoryFailedOrderSet[rsp.List[i].OrderCode] = struct{}{}
@@ -74,9 +75,9 @@ func HandleOrderFailedSkuInventoryRestore() {
 		return
 	}
 	skuInventoryRecordWhere := map[string]interface{}{
-		"op_tx_id": skuInventoryFailedOrder,
-		"verify":   0, // 记录未经验证
-		"op_type":  1, // 出库
+		"out_trade_no": skuInventoryFailedOrder,
+		"verify":       0, // 记录未经验证
+		"op_type":      1, // 出库
 	}
 	skuInventoryRecordList, err := repository.FindSkuInventoryRecordList(sqlSelectSkuInventoryRecord, skuInventoryRecordWhere, 300, 1)
 	if err != nil {
@@ -120,6 +121,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 		inventoryRecordMaps := map[string]interface{}{
 			"verify":      1,
 			"op_tx_id":    opTxId,
+			"op_ip":       "sku-cron",
 			"update_time": time.Now(),
 		}
 		rowAffected, err := repository.UpdateSkuInventoryRecordByTx(tx, inventoryRecordWhere, inventoryRecordMaps)
@@ -143,6 +145,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 		inventoryRestoreRecord := &mysql.SkuInventoryRecord{
 			ShopId:       row.ShopId,
 			SkuCode:      row.SkuCode,
+			OutTradeNo:   row.OutTradeNo,
 			OpType:       3, // 恢复库存
 			OpUid:        0,
 			OpIp:         "micro_mall_sku_cron",
@@ -200,73 +203,73 @@ func HandleOrderFailedSkuInventoryRestore() {
 	return
 }
 
-func HandleOrderSuccessSkuInventoryRestore() {
-	ctx := context.Background()
-	where := map[string]interface{}{
-		"verify":  0, // 记录未经验证
-		"op_type": 1, // 出库
-	}
-	recordList, err := repository.FindSkuInventoryRecordList(sqlSelectSkuInventoryRestore, where, 300, 1)
-	if err != nil {
-		kelvins.ErrLogger.Errorf(ctx, "FindSkuInventoryRecordList,err: %v, req: %+v", err, where)
-		return
-	}
-	if len(recordList) == 0 {
-		return
-	}
-	opTxIds := make([]string, len(recordList))
-	for i := 0; i < len(recordList); i++ {
-		opTxIds[i] = recordList[i].OpTxId
-	}
-	serverName := args.RpcServiceMicroMallOrder
-	conn, err := util.GetGrpcClient(serverName)
-	if err != nil {
-		kelvins.ErrLogger.Errorf(ctx, "GetGrpcClient %v,err: %v", serverName, err)
-		return
-	}
-	defer conn.Close()
-	client := order_business.NewOrderBusinessServiceClient(conn)
-	req := order_business.CheckOrderStateRequest{OrderCodes: opTxIds}
-	rsp, err := client.CheckOrderState(ctx, &req)
-	if err != nil {
-		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest %v,err: %v, req: %+v", serverName, err, req)
-		return
-	}
-	if rsp.Common.Code != order_business.RetCode_SUCCESS {
-		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest %v,err: %v, req: %+v, rsp: %+v", serverName, err, req, rsp)
-		return
-	}
-	if len(rsp.List) == 0 {
-		return
-	}
-	// 支付成功的订单
-	skuInventorySuccessOrder := make([]string, 0)
-	skuInventorySuccessOrderSet := map[string]struct{}{}
-	for i := 0; i < len(rsp.List); i++ {
-		if rsp.List[i].IsExist && rsp.List[i].PayState == order_business.OrderPayStateType_PAY_SUCCESS {
-			if _, ok := skuInventorySuccessOrderSet[rsp.List[i].OrderCode]; !ok {
-				skuInventorySuccessOrderSet[rsp.List[i].OrderCode] = struct{}{}
-				skuInventorySuccessOrder = append(skuInventorySuccessOrder, rsp.List[i].OrderCode)
-			}
-		}
-	}
-	if len(skuInventorySuccessOrder) == 0 {
-		return
-	}
-	updateWhere := map[string]interface{}{
-		"op_tx_id": skuInventorySuccessOrder,
-		"verify":   0, // 记录未经验证
-		"op_type":  1, // 出库
-	}
-	updateMaps := map[string]interface{}{
-		"verify":      1,
-		"op_tx_id":    uuid.New().String(),
-		"update_time": time.Now(),
-	}
-	rowAffected, err := repository.UpdateSkuInventoryRecord(updateWhere, updateMaps)
-	if err != nil {
-		kelvins.ErrLogger.Errorf(ctx, "UpdateSkuInventoryRecord err: %v, where: %+v", err, updateWhere)
-		return
-	}
-	_ = rowAffected
-}
+//func HandleOrderSuccessSkuInventoryRestore() {
+//	ctx := context.Background()
+//	where := map[string]interface{}{
+//		"verify":  0, // 记录未经验证
+//		"op_type": 1, // 出库
+//	}
+//	recordList, err := repository.FindSkuInventoryRecordList(sqlSelectSkuInventoryRestore, where, 300, 1)
+//	if err != nil {
+//		kelvins.ErrLogger.Errorf(ctx, "FindSkuInventoryRecordList,err: %v, req: %+v", err, where)
+//		return
+//	}
+//	if len(recordList) == 0 {
+//		return
+//	}
+//	opTxIds := make([]string, len(recordList))
+//	for i := 0; i < len(recordList); i++ {
+//		opTxIds[i] = recordList[i].OpTxId
+//	}
+//	serverName := args.RpcServiceMicroMallOrder
+//	conn, err := util.GetGrpcClient(serverName)
+//	if err != nil {
+//		kelvins.ErrLogger.Errorf(ctx, "GetGrpcClient %v,err: %v", serverName, err)
+//		return
+//	}
+//	defer conn.Close()
+//	client := order_business.NewOrderBusinessServiceClient(conn)
+//	req := order_business.CheckOrderStateRequest{OrderCodes: opTxIds}
+//	rsp, err := client.CheckOrderState(ctx, &req)
+//	if err != nil {
+//		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest %v,err: %v, req: %+v", serverName, err, req)
+//		return
+//	}
+//	if rsp.Common.Code != order_business.RetCode_SUCCESS {
+//		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest %v,err: %v, req: %+v, rsp: %+v", serverName, err, req, rsp)
+//		return
+//	}
+//	if len(rsp.List) == 0 {
+//		return
+//	}
+//	// 支付成功的订单
+//	skuInventorySuccessOrder := make([]string, 0)
+//	skuInventorySuccessOrderSet := map[string]struct{}{}
+//	for i := 0; i < len(rsp.List); i++ {
+//		if rsp.List[i].IsExist && rsp.List[i].PayState == order_business.OrderPayStateType_PAY_SUCCESS {
+//			if _, ok := skuInventorySuccessOrderSet[rsp.List[i].OrderCode]; !ok {
+//				skuInventorySuccessOrderSet[rsp.List[i].OrderCode] = struct{}{}
+//				skuInventorySuccessOrder = append(skuInventorySuccessOrder, rsp.List[i].OrderCode)
+//			}
+//		}
+//	}
+//	if len(skuInventorySuccessOrder) == 0 {
+//		return
+//	}
+//	updateWhere := map[string]interface{}{
+//		"op_tx_id": skuInventorySuccessOrder,
+//		"verify":   0, // 记录未经验证
+//		"op_type":  1, // 出库
+//	}
+//	updateMaps := map[string]interface{}{
+//		"verify":      1,
+//		"op_tx_id":    uuid.New().String(),
+//		"update_time": time.Now(),
+//	}
+//	rowAffected, err := repository.UpdateSkuInventoryRecord(updateWhere, updateMaps)
+//	if err != nil {
+//		kelvins.ErrLogger.Errorf(ctx, "UpdateSkuInventoryRecord err: %v, where: %+v", err, updateWhere)
+//		return
+//	}
+//	_ = rowAffected
+//}

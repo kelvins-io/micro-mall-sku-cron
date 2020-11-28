@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	CronHandleOrderFailedInventoryRestore  = "30 */10 * * * *"
+	CronHandleOrderFailedInventoryRestore  = "0 */30 * * * *" // 出现概率较小
 	CronHandleOrderSuccessInventoryRestore = "30 */2 * * * *"
 )
 
@@ -17,10 +17,10 @@ func GenCronJobs() []*kelvins.CronJob {
 		Spec: CronHandleOrderFailedInventoryRestore,
 		Job:  service.HandleOrderFailedSkuInventoryRestore,
 	})
-	tasks = append(tasks, &kelvins.CronJob{
-		Name: "库存恢复-订单创建成功",
-		Spec: CronHandleOrderSuccessInventoryRestore,
-		Job:  service.HandleOrderSuccessSkuInventoryRestore,
-	})
+	//tasks = append(tasks, &kelvins.CronJob{
+	//	Name: "库存恢复-订单创建成功",
+	//	Spec: CronHandleOrderSuccessInventoryRestore,
+	//	Job:  service.HandleOrderSuccessSkuInventoryRestore,
+	//})
 	return tasks
 }
