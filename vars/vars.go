@@ -1,6 +1,7 @@
 package vars
 
 var (
-	AppName            = ""
-	EmailConfigSetting *EmailConfigSettingS
+	AppName                                = ""
+	EmailConfigSetting                     *EmailConfigSettingS
+	OrderFailedInventoryRestoreTaskSetting *OrderFailedInventoryRestoreTaskSettingS
 )

@@ -6,3 +6,7 @@ type EmailConfigSettingS struct {
 	Host     string `json:"host"`
 	Port     string `json:"port"`
 }
+
+type OrderFailedInventoryRestoreTaskSettingS struct {
+	Cron string `json:"cron"`
+}
