@@ -13,3 +13,4 @@
 vendor/
 logs/
 micro-mall-sku-cron
+etc/app.ini
