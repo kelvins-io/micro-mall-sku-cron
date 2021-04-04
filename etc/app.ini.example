@@ -9,7 +9,7 @@ Level = "debug"
 [kelvins-mysql]
 Host = "127.0.0.1:3306"
 UserName = "root"
-Password = "07030501310"
+Password = "fasdfasdf"
 DBName = "micro_mall_sku"
 Charset = "utf8mb4"
 PoolNum =  10
@@ -19,8 +19,8 @@ MultiStatements = true
 ParseTime = true
 
 [email-config]
-User = "1225807604@qq.com"
-Password = "glxggszbnrnigcii"
+User = "fasdfa@qq.com"
+Password = "fasdfa"
 Host = "smtp.qq.com"
 Port = "465"
 
