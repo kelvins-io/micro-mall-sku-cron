@@ -14,3 +14,8 @@ vendor/
 logs/
 micro-mall-sku-cron
 etc/app.ini
+micro-mall-sku-cron.pid
+micro-mall-sku-cron-darwin-amd64
+micro-mall-sku-cron-linux-amd64
+micro-mall-sku-cron-windows-amd64.exe
+micro-mall-sku-cron-windows-amd64
