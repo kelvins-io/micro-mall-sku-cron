@@ -9,7 +9,7 @@ Level = "debug"
 [kelvins-mysql]
 Host = "mysql5_7:3306"
 UserName = "root"
-Password = "micro_mall"
+Password = "micro-mall"
 DBName = "micro_mall_sku"
 Charset = "utf8mb4"
 PoolNum =  10
