@@ -1,6 +1,6 @@
 [kelvins-server]
-EndPoint = 8080
 IsRecordCallResponse = true
+Environment = "dev"
 
 [kelvins-logger]
 RootPath = "./logs"
