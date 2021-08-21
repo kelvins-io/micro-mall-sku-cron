@@ -45,7 +45,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 		kelvins.ErrLogger.Errorf(ctx, "GetGrpcClient %v,err: %v", serverName, err)
 		return
 	}
-	defer conn.Close()
+	//defer conn.Close()
 	client := order_business.NewOrderBusinessServiceClient(conn)
 	req := order_business.CheckOrderStateRequest{OrderCodes: outTradeNoList}
 	rsp, err := client.CheckOrderState(ctx, &req)
