@@ -7,6 +7,7 @@ import (
 	"gitee.com/cristiane/micro-mall-sku-cron/pkg/util"
 	"gitee.com/cristiane/micro-mall-sku-cron/proto/micro_mall_order_proto/order_business"
 	"gitee.com/cristiane/micro-mall-sku-cron/repository"
+	"gitee.com/kelvins-io/common/json"
 	"gitee.com/kelvins-io/kelvins"
 	"github.com/google/uuid"
 	"time"
@@ -25,7 +26,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 	}
 	recordList, err := repository.FindSkuInventoryRecordList(sqlSelectSkuInventoryRestore, where, 300, 1)
 	if err != nil {
-		kelvins.ErrLogger.Errorf(ctx, "FindSkuInventoryRecordList,err: %v, req: %+v", err, where)
+		kelvins.ErrLogger.Errorf(ctx, "FindSkuInventoryRecordList,err: %v, req: %v", err, json.MarshalToStringNoError(where))
 		return
 	}
 	if len(recordList) == 0 {
@@ -50,11 +51,11 @@ func HandleOrderFailedSkuInventoryRestore() {
 	req := order_business.CheckOrderStateRequest{OrderCodes: outTradeNoList}
 	rsp, err := client.CheckOrderState(ctx, &req)
 	if err != nil {
-		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest %v,err: %v, req: %+v", serverName, err, req)
+		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest %v,err: %v, req: %v", serverName, err, json.MarshalToStringNoError(req))
 		return
 	}
 	if rsp.Common.Code != order_business.RetCode_SUCCESS {
-		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest %v,err: %v, req: %+v, rsp: %+v", serverName, err, req, rsp)
+		kelvins.ErrLogger.Errorf(ctx, "CheckOrderStateRequest req: %v, rsp: %v", json.MarshalToStringNoError(req), json.MarshalToStringNoError(rsp))
 		return
 	}
 	if len(rsp.List) == 0 {
@@ -81,7 +82,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 	}
 	skuInventoryRecordList, err := repository.FindSkuInventoryRecordList(sqlSelectSkuInventoryRecord, skuInventoryRecordWhere, 300, 1)
 	if err != nil {
-		kelvins.ErrLogger.Errorf(ctx, "FindSkuInventoryRecordList err: %v, where: %+v", err, skuInventoryRecordWhere)
+		kelvins.ErrLogger.Errorf(ctx, "FindSkuInventoryRecordList err: %v, where: %v", err, json.MarshalToStringNoError(skuInventoryRecordWhere))
 		return
 	}
 	if len(skuInventoryRecordList) == 0 {
@@ -130,7 +131,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 			if err != nil {
 				kelvins.ErrLogger.Errorf(ctx, "HandleSkuInventoryRestore  Rollback err: %v, ", err)
 			}
-			kelvins.ErrLogger.Errorf(ctx, "UpdateSkuInventoryRecord err: %v, where: %+v,maps: %+v ", err, inventoryRecordWhere, inventoryRecordMaps)
+			kelvins.ErrLogger.Errorf(ctx, "UpdateSkuInventoryRecord err: %v, where: %v,maps: %v ", err, json.MarshalToStringNoError(inventoryRecordWhere), json.MarshalToStringNoError(inventoryRecordMaps))
 			return
 		}
 		// 库存记录可能是同一个订单扣减的
@@ -163,7 +164,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 			if err != nil {
 				kelvins.ErrLogger.Errorf(ctx, "CreateSkuInventoryRecord  Rollback err: %v, ", err)
 			}
-			kelvins.ErrLogger.Errorf(ctx, "CreateSkuInventoryRecord err: %v, inventoryRestoreRecord: %+v", err, inventoryRestoreRecord)
+			kelvins.ErrLogger.Errorf(ctx, "CreateSkuInventoryRecord err: %v, inventoryRestoreRecord: %v", err, json.MarshalToStringNoError(inventoryRestoreRecord))
 			return
 		}
 		// 更新库存
@@ -184,7 +185,7 @@ func HandleOrderFailedSkuInventoryRestore() {
 			if err != nil {
 				kelvins.ErrLogger.Errorf(ctx, "UpdateSkuInventory  Rollback err: %v, ", err)
 			}
-			kelvins.ErrLogger.Errorf(ctx, "UpdateSkuInventory err: %v, where: %+v,maps: %+v ", err, updateSkuInventoryWhere, updateSkuInventoryMaps)
+			kelvins.ErrLogger.Errorf(ctx, "UpdateSkuInventory err: %v, where: %v,maps: %v ", err, json.MarshalToStringNoError(updateSkuInventoryWhere), json.MarshalToStringNoError(updateSkuInventoryMaps))
 			return
 		}
 		if rowAffected != 1 {
