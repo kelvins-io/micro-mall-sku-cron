@@ -1,5 +1,4 @@
 [kelvins-server]
-IsRecordCallResponse = true
 Environment = "dev"
 
 [kelvins-logger]
