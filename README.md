@@ -39,6 +39,7 @@ MultiStatements = true
 ParseTime = true
 
 [email-config]
+Enable = false
 User = "fasdfa@qq.com"
 Password = "fasdfa"
 Host = "smtp.qq.com"
