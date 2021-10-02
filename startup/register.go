@@ -17,6 +17,15 @@ func GenCronJobs() []*kelvins.CronJob {
 			})
 		}
 	}
+	if vars.SkuInventorySearchSyncTaskSetting != nil {
+		if vars.SkuInventorySearchSyncTaskSetting.Cron != "" {
+			tasks = append(tasks, &kelvins.CronJob{
+				Name: "商品库存-搜索同步",
+				Spec: vars.SkuInventorySearchSyncTaskSetting.Cron,
+				Job:  service.SkuInventorySearchSync,
+			})
+		}
+	}
 
 	return tasks
 }

@@ -10,6 +10,23 @@ type MerchantsMaterialInfo struct {
 	TaxCardNo    string
 }
 
+type SkuInventoryInfo struct {
+	ShopId        int64  `json:"shop_id"`
+	SkuCode       string `json:"sku_code"`
+	Name          string `json:"name"`
+	Price         string `json:"price"`
+	Title         string `json:"title"`
+	SubTitle      string `json:"sub_title"`
+	Desc          string `json:"desc"`
+	Production    string `json:"production"`
+	Supplier      string `json:"supplier"`
+	Category      int32  `json:"category"`
+	Color         string `json:"color"`
+	ColorCode     int32  `json:"color_code"`
+	Specification string `json:"specification"`
+	DescLink      string `json:"desc_link"`
+}
+
 const (
 	RpcServiceMicroMallUsers = "micro-mall-users"
 	RpcServiceMicroMallShop  = "micro-mall-shop"
@@ -17,15 +34,16 @@ const (
 )
 
 const (
-	TaskNameTradeOrderNotice    = "task_trade_order_notice"
-	TaskNameTradeOrderNoticeErr = "task_trade_order_notice_err"
+	SkuInventorySearchNotice       = 1000
+	SkuInventorySearchNoticeTag    = "sku_inventory_search_notice"
+	SkuInventorySearchNoticeTagErr = "sku_inventory_search_notice_err"
 )
 
 type CommonBusinessMsg struct {
-	Type int    `json:"type"`
-	Tag  string `json:"tag"`
-	UUID string `json:"uuid"`
-	Msg  string `json:"msg"`
+	Type    int    `json:"type"`
+	Tag     string `json:"tag"`
+	UUID    string `json:"uuid"`
+	Content string `json:"content"`
 }
 
 type TradeOrderDetail struct {

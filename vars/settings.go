@@ -11,3 +11,7 @@ type EmailConfigSettingS struct {
 type OrderFailedInventoryRestoreTaskSettingS struct {
 	Cron string `json:"cron"`
 }
+
+type SkuInventorySearchSyncTaskSettingS struct {
+	Cron string `json:"cron"`
+}
