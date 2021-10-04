@@ -9,7 +9,6 @@ import (
 	"gitee.com/kelvins-io/common/json"
 	"gitee.com/kelvins-io/kelvins"
 	"github.com/google/uuid"
-	"time"
 )
 
 const (
@@ -28,7 +27,6 @@ func SkuInventorySearchSync() {
 			break
 		}
 		skuInventorySearchSyncOne(pageSize, pageNum)
-		time.Sleep(5 * time.Second)
 		count++
 		pageNum++
 	}
@@ -67,7 +65,7 @@ func skuInventorySearchSyncOne(pageSize, pageNum int) {
 			info := &args.SkuInventoryInfo{
 				ShopId:        list[i].ShopId,
 				SkuCode:       list[i].SkuCode,
-				Name:          list[i].Price,
+				Name:          propertyInfo.Name,
 				Price:         list[i].Price,
 				Title:         propertyInfo.Title,
 				SubTitle:      propertyInfo.SubTitle,

@@ -8,7 +8,8 @@ import (
 
 func FindSkuInventoryList(sqlSelect string, where interface{}, pageSize, pageNum int) ([]mysql.SkuInventory, error) {
 	var result = make([]mysql.SkuInventory, 0)
-	err := kelvins.XORM_DBEngine.Table(mysql.TableSkuInventory).Select(sqlSelect).Where(where).Limit(pageSize, (pageNum-1)*pageSize).Find(&result)
+	err := kelvins.XORM_DBEngine.Table(mysql.TableSkuInventory).Select(sqlSelect).Where(where).Desc("update_time").
+		Limit(pageSize, (pageNum-1)*pageSize).Find(&result)
 	return result, err
 }
 
