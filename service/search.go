@@ -11,19 +11,20 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	sqlSelectSkuInventorySearch = "*"
-)
-
 var (
 	pageSize = 50
 	pageNum  = 1
 )
 
 func SkuInventorySearchSync() {
+	if vars.SkuInventorySearchSyncTaskSetting != nil {
+		if vars.SkuInventorySearchSyncTaskSetting.SingleSyncNum > 0 {
+			pageSize = vars.SkuInventorySearchSyncTaskSetting.SingleSyncNum
+		}
+	}
 	count := 0
 	for {
-		if count > 2 {
+		if count > 5 {
 			break
 		}
 		skuInventorySearchSyncOne(pageSize, pageNum)
@@ -31,6 +32,10 @@ func SkuInventorySearchSync() {
 		pageNum++
 	}
 }
+
+const (
+	sqlSelectSkuInventorySearch = "sku_code,shop_id,price"
+)
 
 func skuInventorySearchSyncOne(pageSize, pageNum int) {
 	ctx := context.TODO()

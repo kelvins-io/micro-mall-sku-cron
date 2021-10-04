@@ -41,3 +41,4 @@ Cron = "0 */4 * * * *"
 
 [sku-inventory-search-notice-task]
 Cron = "0 */6 * * * *"
+SingleSyncNum = 100

@@ -8,7 +8,6 @@ const (
 	TableSkuInventory       = "sku_inventory"
 	TableSkuInventoryRecord = "sku_inventory_record"
 	TableSkuProperty        = "sku_property"
-	TableSkuPriceHistory    = "sku_price_history"
 )
 
 type SkuInventory struct {
